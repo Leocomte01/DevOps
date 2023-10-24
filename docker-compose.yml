@@ -1,0 +1,35 @@
+version: '3.7'
+
+services:
+    backend:
+        build:
+            context : ./Backend/simple-api-student-main
+            dockerfile: Dockerfile
+        container_name: my_api_student
+        networks:
+        - app-network
+        depends_on:
+        - database
+
+    database:
+        build:
+            context: ./Database
+            dockerfile: Dockerfile
+        container_name : mydb
+        networks:
+        - app-network
+
+    httpd:
+        build:
+            context: ./Front
+            dockerfile: Dockerfile
+        container_name: myfront
+        ports:
+        - "80:80"
+        networks:
+        - app-network
+        depends_on:
+        - backend
+
+networks:
+    app-network:
