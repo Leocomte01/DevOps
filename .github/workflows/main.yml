@@ -56,6 +56,7 @@ jobs:
         with:
           context: ./Database  # Le chemin vers votre code de base de données
           tags: ${{secrets.DOCKERHUB_USERNAME}}/mydb
+          push: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build image and push httpd
      # DO the same for httpd
@@ -63,4 +64,5 @@ jobs:
         with:
           context: ./Front  # Le chemin vers votre code HTTPD
           tags: ${{secrets.DOCKERHUB_USERNAME}}/myfront
+          push: ${{ github.ref == 'refs/heads/main' }}
       
