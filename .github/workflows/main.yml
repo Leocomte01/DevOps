@@ -23,6 +23,6 @@ jobs:
 
      #finally build your app with the latest command
       - name: Build and test with Maven
-        run: |
-          cd C:/Users/leoco/OneDrive/Bureau/epf/5A/DevOps/TP/Backend/simple-api-student-main/pom.xml 
+        working-directory: ./simple-api-student-main
+        run:           
           mvn clean verify
