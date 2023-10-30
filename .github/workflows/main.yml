@@ -21,8 +21,8 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 17
-          path: ./simple-api-student-main
+          path: C:/Users/leoco/OneDrive/Bureau/epf/5A/DevOps/TP/Backend/simple-api-student-main
 
      #finally build your app with the latest command
       - name: Build and test with Maven
-        run: mvn clean verify -f ./simple-api-student-main/pom.xml
+        run: mvn clean verify -f C:/Users/leoco/OneDrive/Bureau/epf/5A/DevOps/TP/Backend/simple-api-student-main
