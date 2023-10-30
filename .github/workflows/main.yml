@@ -42,20 +42,20 @@ build-and-push-docker-image:
      uses: docker/build-push-action@v3
      with:
        # relative path to the place where source code with Dockerfile is located
-       context: ./Backend/simple-api-student-main
+      context: ./Backend/simple-api-student-main
        # Note: tags has to be all lower-case
-       tags:  ${{secrets.DOCKERHUB_USERNAME}}/my_api_student
+      tags:  ${{secrets.DOCKERHUB_USERNAME}}/my_api_student
 
    - name: Build image and push database
        # DO the same for database
-      uses: docker/build-push-action@v3
-      with:
-        context: ./Database  # Le chemin vers votre code de base de données
-        tags: ${{secrets.DOCKERHUB_USERNAME}}/mydb
+     uses: docker/build-push-action@v3
+     with:
+      context: ./Database  # Le chemin vers votre code de base de données
+      tags: ${{secrets.DOCKERHUB_USERNAME}}/mydb
 
    - name: Build image and push httpd
      # DO the same for httpd
-      uses: docker/build-push-action@v3
-      with:
-        context: ./Front  # Le chemin vers votre code HTTPD
-        tags: ${{secrets.DOCKERHUB_USERNAME}}/myfront
+     uses: docker/build-push-action@v3
+     with:
+      context: ./Front  # Le chemin vers votre code HTTPD
+      tags: ${{secrets.DOCKERHUB_USERNAME}}/myfront
