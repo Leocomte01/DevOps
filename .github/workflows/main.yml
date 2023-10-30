@@ -45,6 +45,7 @@ jobs:
           context: ./Backend/simple-api-student-main
        # Note: tags has to be all lower-case
           tags:  ${{secrets.DOCKERHUB_USERNAME}}/my_api_student
+          push: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build image and push database
        # DO the same for database
