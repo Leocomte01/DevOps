@@ -1,0 +1,649 @@
+TP part 01 - Docker
+
+Database
+
+Création du fichier Dockerfile :
+
+FROM postgres:14.1-alpine
+
+ENV POSTGRES_DB=db \
+   POSTGRES_USER=usr \
+   POSTGRES_PASSWORD=pwd
+
+Création du network : 
+
+docker network create app-network
+
+Démarrage d’Adminer :
+
+    docker run \
+    -p "8090:8080" \
+    --net=app-network \
+    --name=adminer \
+    -d \
+    adminer
+
+Run adminer & la database : 
+
+docker run -p 8888:5000 --name mydatabase —network app-network leooo01/mydatabase
+
+Création de deux fichiers sql, placés dans un dossier initdb :
+
+01-CreateScheme.sql :
+
+CREATE TABLE public.departments
+(
+ id      SERIAL      PRIMARY KEY,
+ name    VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE public.students
+(
+ id              SERIAL      PRIMARY KEY,
+ department_id   INT         NOT NULL REFERENCES departments (id),
+ first_name      VARCHAR(20) NOT NULL,
+ last_name       VARCHAR(20) NOT NULL
+);
+
+02-InsertData.sql :
+
+INSERT INTO departments (name) VALUES ('IRC');
+INSERT INTO departments (name) VALUES ('ETI');
+INSERT INTO departments (name) VALUES ('CGP');
+
+
+INSERT INTO students (department_id, first_name, last_name) VALUES (1, 'Eli', 'Copter');
+INSERT INTO students (department_id, first_name, last_name) VALUES (2, 'Emma', 'Carena');
+INSERT INTO students (department_id, first_name, last_name) VALUES (2, 'Jack', 'Uzzi');
+INSERT INTO students (department_id, first_name, last_name) VALUES (3, 'Aude', 'Javel');
+
+Ajouter dans le Dockerfile :
+
+COPY /initdb /docker-entrypoint-initdb.d
+
+Rebuild l’image : 
+
+docker build -t leooo01/mydatabase .
+
+Re-run : 
+
+docker run -p 8888:5000 --name mydatabase leooo01/mydatabase
+
+Persistance des données : 
+
+docker run -p 8888:5000 --name mydatabase -v /my/own/datadir:/var/lib/postgresql/data
+leooo01/mydatabase
+
+Pour tester la persistence : on ajoute un étudiant dans la base de données, on tue le container, on le re-run, et l’élève est toujours présent dans la base de données. 
+On peut aussi visualiser les volumes directement sur DockerDesktop.
+
+Back end API
+
+Dans le DockerFile, on rajoute : 
+
+FROM eclipse-temurin:8-jdk-alpine
+COPY Main.java .
+RUN javac Main.java
+
+CMD ["java", “Main"]
+
+Backend simple api
+
+Creation of a Springboot application on: Spring Initializer with the following config :
+Project: Maven
+Language: Java 17
+Spring Boot: 2.7.5
+Packaging: Jar
+Dependencies: Spring Web
+
+
+Creation of a Controller package and a GreetingController class : 
+
+package fr.takima.training.simpleapi.controller;
+
+import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+@RestController
+public class GreetingController {
+
+   private static final String template = "Hello, %s!";
+   private final AtomicLong counter = new AtomicLong();
+
+   @GetMapping("/")
+   public Greeting greeting(@RequestParam(value = "name", defaultValue = "World") String name) {
+       return new Greeting(counter.incrementAndGet(), String.format(template, name));
+   }
+
+   record Greeting(long id, String content) {}
+
+}
+
+Creation of a Dockerfile in simpleapi folder :
+
+# Build
+FROM maven:3.8.6-amazoncorretto-17 AS myapp-build
+ENV MYAPP_HOME /opt/myapp
+WORKDIR $MYAPP_HOME
+COPY pom.xml .
+COPY src ./src
+RUN mvn package -DskipTests
+
+# Run
+FROM amazoncorretto:17
+ENV MYAPP_HOME /opt/myapp
+WORKDIR $MYAPP_HOME
+COPY --from=myapp-build $MYAPP_HOME/target/*.jar $MYAPP_HOME/myapp.jar
+
+ENTRYPOINT java -jar myapp.jar
+
+Question : 1-2 Why do we need a multistage build? And explain each step of this dockerfile.
+
+Multistage builds are employed to enhance Docker images by segregating the construction environment from the ultimate production image. This practice minimizes the final image's size and eradicates superfluous build prerequisites.
+
+FROM maven:3.8.6-amazoncorretto-17 AS myapp-build
+#sets the base image to Maven with Amazon Corretto 17. AS creates a name build stage to be referenced to. 
+
+ENV MYAPP_HOME /opt/myapp
+#defines an environment variable MYAPP_HOME, which specifies the application's home directory inside the container.
+
+WORKDIR $MYAPP_HOME
+#sets the working directory in the container to $MYAPP_HOME, which will be “/opt/myapp."
+
+COPY pom.xml . and COPY src ./src
+#copies the project's pom.xml and the src directory into the container.
+
+RUN mvn package -DskipTests 
+#it runs Maven to build the application. The -DskipTests flag skips the execution of tests. After this command, the application is compiled, and the resulting JAR file is created.
+
+
+FROM amazoncorretto:17
+#sets the base image to Amazon Corretto 17
+
+ENV MYAPP_HOME /opt/myapp
+#Defines the MYAPP_HOME environment variable
+
+WORKDIR $MYAPP_HOME
+#Sets the working directory to the application's home directory.
+
+COPY --from=myapp-build $MYAPP_HOME/target/*.jar $MYAPP_HOME/myapp.jar 
+#Copies the JAR file generated in the previous build stage from the "myapp-build" stage to the final image's /opt/myapp directory as "myapp.jar." It only includes the necessary artifacts in the final image while excluding build dependencies.
+
+ENTRYPOINT java -jar myapp.jar 
+#Specifies the command to execute when the container is started. Here, it runs the Java application by executing the JAR file with the java -jar command.
+
+Backend API
+
+Copie du dossier simple api-student téléchargeable. 
+
+On complète le fichier application.yml : 
+
+datasource:
+    url: jdbc:postgresql://mydatabase:5432/db
+    username: usr
+    password: pwd
+    driver-class-name: org.postgresql.Driver
+
+On build, on run avec le network : 
+docker run -p 8091:8080 --name mybackend --network app-network leooo01/mybackend
+
+
+Http server
+
+Création d’un dossier httpserver, d’un dockerfile :
+
+FROM httpd:2.4.58
+COPY ./public-html/ /usr/local/apache2/htdocs/
+
+Création d’un index.html avec hello world, que l’on met dans un dossier public-html
+On build : docker build -t leooo01/myfrontend .
+On run : docker run -p 8080:80 --name myfrontend leooo01/myfrontend
+
+La page s’affiche correctement sur localhost:8080
+
+On rajoute dans le dockerfile : 
+COPY ./conf/httpd.conf /usr/local/apache2/conf/httpd.conf
+
+
+Reverse proxy
+ 
+On rajoute dans le httpd.conf : 
+
+<VirtualHost *:80>
+
+ProxyPreserveHost On
+
+ProxyPass / http://YOUR_BACKEND_LINK:8080/
+
+ProxyPassReverse / http://YOUR_BACKEND_LINK:8080/
+
+</VirtualHost>
+
+LoadModule proxy_module modules/mod_proxy.so
+
+LoadModule proxy_http_module modules/mod_proxy_http.so
+
+
+
+On rebuild : docker build -t leooo01/myfrontend .
+
+On re-run : docker run -p 8080:80 --name myfrontend --network app-network leooo01/myfrontend
+
+
+Link application
+
+1-3 Document docker-compose most important commands. 
+1-4 Document your docker-compose file.
+
+Création d’un docker-compose.yml : 
+
+version: '3.7'
+
+services:
+    backend:
+        build:
+          context: ./simple-api-student-main
+          dockerfile: Dockerfile
+        container_name: mybackend
+        networks:
+        - app-network
+        depends_on:
+        - database
+
+    database:
+        build:
+          context : .
+          dockerfile : Dockerfile
+        container_name: mydatabase
+        networks:
+        - app-network
+
+    httpd:
+        build:
+          context : ./httpserver
+          dockerfile : Dockerfile
+        container_name: myfrontend
+        ports:
+        - "8080:80"
+        networks:
+        - app-network
+        depends_on:
+        - backend
+
+networks:
+    app-network:
+
+Puis docker compose up
+
+Publish
+Connexion au compte DockerHub : 
+docker login
+
+Tagger l’image :
+docker tag tp1-httpd leooo01/tp1-httpd:1.0
+
+Pousser l’image sur dockerhub :
+docker push leooo01/tp1-httpd:1.0
+
+On peut visualiser l’image sur le compte DockerHub : 
+
+
+
+
+
+
+
+
+
+TP part 02 - Github Actions
+
+Build and test your application
+
+Build et Run les tests, à lancer depuis le pom.xml
+mvn clean verify
+
+2-1 What are testcontainers?
+
+They simply are java libraries that allow you to run a bunch of docker containers while testing.
+
+2-2 Document your Github Actions configurations.
+
+Création d’un repository GitHub
+git init 
+git remote add origin https://github.com/Cotterding/tpDocker.git
+git push --set-upstream origin main
+
+
+Création des dossiers : .github/workflows et du fichier main.yml
+
+name: CI devops 2023
+on:
+  #to begin you want to launch this job in main and develop
+  push:
+    branches: 
+      - main
+      - tp1
+  pull_request:
+
+jobs:
+  test-backend: 
+    runs-on: ubuntu-22.04
+    steps:
+     #checkout your github code using actions/checkout@v2.5.0
+      - uses: actions/checkout@v2.5.0
+
+     #do the same with another action (actions/setup-java@v3) that enable to setup jdk 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+
+     #finally build your app with the latest command
+      - name: Build and test with Maven
+        working-directory : simple-api-student-main
+        run: |
+          mvn clean verify
+
+
+La pipeline a fonctionné :
+
+ Construire une docker image dans la GitHub Actions pipeline.
+
+Rajout dans le main.yml :
+
+# define job to build and publish docker image
+  build-and-push-docker-image:
+   needs: test-backend
+   # run only when code is compiling and tests are passing
+   runs-on: ubuntu-22.04
+
+   # steps to perform in job
+   steps:
+     - name: Checkout code
+       uses: actions/checkout@v2.5.0
+
+     - name: Build image and push backend
+       uses: docker/build-push-action@v3
+       with:
+         # relative path to the place where source code with Dockerfile is located
+         context: ./simple-api-student-main
+         # Note: tags has to be all lower-case
+         tags:  ${{secrets.DOCKERHUB_USERNAME}}/tp-devops/simple-api
+
+     - name: Build image and push database
+       uses: docker/build-push-action@v3
+       with:
+          context: .
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops/database
+
+     - name: Build image and push httpd
+       uses: docker/build-push-action@v3
+       with:
+        context: ./httpserver
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops/httpd
+
+La pipeline fonctionne :
+Rajout dans le main.yml : 
+
+name: CI devops 2023
+on:
+  #to begin you want to launch this job in main and develop
+  push:
+    branches: 
+      - main
+      - tp1
+  pull_request:
+
+jobs:
+  test-backend: 
+    runs-on: ubuntu-22.04
+    steps:
+     #checkout your github code using actions/checkout@v2.5.0
+      - uses: actions/checkout@v2.5.0
+
+     #do the same with another action (actions/setup-java@v3) that enable to setup jdk 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+
+     #finally build your app with the latest command
+      - name: Build and test with Maven
+        working-directory : simple-api-student-main
+        run: |
+          mvn clean verify
+
+    # define job to build and publish docker image
+  build-and-push-docker-image:
+   needs: test-backend
+   # run only when code is compiling and tests are passing
+   runs-on: ubuntu-22.04
+
+   # steps to perform in job
+   steps:
+
+     - name: Login to DockerHub
+       run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+       
+     - name: Checkout code
+       uses: actions/checkout@v2.5.0
+
+     - name: Build image and push backend
+       uses: docker/build-push-action@v3
+       with:
+         # relative path to the place where source code with Dockerfile is located
+         context: ./simple-api-student-main
+         # Note: tags has to be all lower-case
+         tags:  ${{secrets.DOCKERHUB_USERNAME}}/tp-devops:simple-api-student-main
+         # build on feature branches, push only on main branch
+         push: ${{ github.ref == 'refs/heads/main' }}
+
+     - name: Build image and push database
+       uses: docker/build-push-action@v3
+       with:
+          context: .
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops:database
+          push: ${{ github.ref == 'refs/heads/main' }}
+
+     - name: Build image and push httpd
+       uses: docker/build-push-action@v3
+       with:
+        context: ./httpserver
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops:httpd
+        push: ${{ github.ref == 'refs/heads/main' }}
+
+
+
+L’image a bien été créée sur DockerHub dans les repositories :  
+
+
+Création d’un compte SonarCloud, en prenant un free-trial et en créant une organisation :
+Récupération d’une project key et une organization key, puis création de secret dans GitHub.
+
+
+
+
+
+ Ajout dans le main.yml :
+
+- name: Cache SonarCloud packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+     #finally build your app with the latest command
+      - name: Build and test with Maven
+        working-directory : simple-api-student-main
+        run: |
+          mvn -B verify sonar:sonar -Dsonar.projectKey=Cotterding_tpDocker -Dsonar.organization=cotterding -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+
+
+
+
+On obtient bien HelloWorld à la bonne adresse : 
+
+
+TD 3 :
+
+Création d’un /ansible/inventories/setup.yml
+
+all:
+  vars:
+    ansible_user: centos
+    ansible_ssh_private_key_file: ../id_rsa
+  children:
+    prod:
+      hosts: julie.doligezlelourec.takima.cloud
+
+On teste : 
+
+ansible all -i inventories/setup.yml -m ping
+
+On obtient : 
+Request your server to get your OS distribution, thanks to the setup module : 
+
+
+
+
+
+
+
+
+
+Remove the installed Apache httpd server on the machine : 
+
+Creation of a ansible/playbook.yml : 
+
+- hosts: all
+
+  gather_facts: false
+
+  become: true
+
+  tasks:
+
+   - name: Test connection
+
+     ping:
+
+
+
+Exécution du playbook :
+
+Rajout dans le playbook to install docker on the server : 
+
+tasks:
+  - name: Clean packages
+    command:
+      cmd: yum clean -y packages
+
+  - name: Install device-mapper-persistent-data
+    yum:
+      name: device-mapper-persistent-data
+      state: latest
+
+  - name: Install lvm2
+    yum:
+      name: lvm2
+      state: latest
+
+  - name: add repo docker
+    command:
+      cmd: sudo yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+
+  - name: Install Docker
+    yum:
+      name: docker-ce
+      state: present
+
+  - name: Make sure Docker is running
+    service: name=docker state=started
+    tags: docker
+
+On vérifie que Docker est bien installé sur le serveur : 
+
+On fait cette commande : ansible-galaxy init roles/docker
+Un dossier roles est crée : on ne garde que les deux dossiers : handlers et tasks
+
+Dans le main.yml de tasks : 
+- name: Clean packages
+  command:
+    cmd: yum clean -y packages
+
+- name: Install device-mapper-persistent-data
+  yum:
+    name: device-mapper-persistent-data
+    state: latest
+
+- name: Install lvm2
+  yum:
+    name: lvm2
+    state: latest
+
+- name: add repo docker
+  command:
+    cmd: sudo yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+
+- name: Install Docker
+  yum:
+    name: docker-ce
+    state: present
+
+- name: Make sure Docker is running
+  service: name=docker state=started
+  tags: docker
+
+Dans le playbook : 
+
+- hosts: all
+  gather_facts: false
+  become: true
+
+  roles:
+    - docker
+
+Deploy your app :
+
+On définit les roles suivant : 
+install docker
+create network
+launch database
+launch app
+launch proxy
+
+Dans les tasks :
+
+- name: Lauch app
+  docker_container:
+    name: mybackend
+    image: leooo01/tp-devops-simple-api-student-main:latest
+    networks: 
+      - name: app-network
+
+- name: Create a network
+  community.docker.docker_network:
+    name: app-network
+
+- name: Run HTTPD
+  docker_container:
+    name: myfrontend
+    image: leooo01/tp-devops-httpd:latest
+    networks: 
+      - name: app-network
+    ports: 
+      - 8080:80
+
+- name: Launch database
+  docker_container:
+    name: mydatabase
+    image: leooo01/tp-devops-database:latest
+    networks:
+      - name: app-network
+    env:
+      POSTGRES_DB: "db"
+      POSTGRES_USER: "usr"
+      POSTGRES_PASSWORD: "pwd"
